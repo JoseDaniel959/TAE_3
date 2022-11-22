@@ -7,6 +7,14 @@ import pydeck as pdk
 import datetime
 from ast import literal_eval
 import plotly.express as px
+import statsmodels
+import pickle
+import holidays_co
+
+with open('model.pkl', 'rb') as file:
+  model = pickle.load(file)
+
+print('CARGÓ')
 
 #imagenes
 image = Image.open('desarrollo2.png')
@@ -133,7 +141,8 @@ fecha_final_final= st.date_input(
     "Fecha final",
     datetime.date(2021, 1, 1))
 
-st.write("holaaaa")
+if st.button('Predecir'):
+    print('hola')
 
 st.markdown('## Agrupamiento')
 st.markdown('En esta sección puede seleccionar algún barrio y ver las características que posee')
@@ -156,3 +165,63 @@ st.markdown('### Características del barrio ' + nombre_barrio)
 cluster = df2.loc[df2['barrio'] == nombre_barrio, 'cluster'].iloc[0]
 
 st.markdown('Este barrio pertenece al grupo '+ str(cluster))
+
+
+### Funciones
+
+def parapredecir(mes, dia, comuna, clase_accidente, anio, semana, dia_esp):
+  dias = [0]*30
+  if dia != 1:
+    dias[dia-2]=1
+  
+  meses = [0]*11
+  if mes != 1:
+    dias[mes-2]=1
+  
+  comunas = ['T.AU','T.Aranjuez','T.Belén','T.Buenos Aires','T.Castilla','T.Corregimiento de Altavista','T.Corregimiento de San Antonio de Prado','T.Corregimiento de San Cristóbal',
+             'T.Corregimiento de San Sebastián de Palmitas','T.Corregimiento de Santa Elena','T.Doce de Octubre','T.El Poblado','T.Guayabal','T.In','T.La América','T.La Candelaria',
+             'T.Laureles Estadio','T.Manrique','T.Popular','T.Robledo','T.SN','T.San Javier','T.Santa Cruz','T.Villa Hermosa']
+  indice_com = comunas.index(comuna)
+
+  for i in range(len(comunas)):
+    if i != indice_com:
+      comunas[i]=0
+    else:
+      comunas[i]=1
+
+  lista_accidentes = ['T.Caida Ocupante', 'T.Caída de Ocupante', 'T.Choque', 'T.Incendio', 'T.Otro', 'T.Volcamiento']
+  indice_acc = lista_accidentes.index(clase_accidente)
+
+  for i in range(len(lista_accidentes)):
+    if i != indice_acc:
+      lista_accidentes[i]=0
+    else:
+      lista_accidentes[i]=1
+  
+  return [1]+meses+dias+comunas+lista_accidentes+[anio]+[semana]+[dia_esp]
+
+# La fecha se va a recibir en el formato AAAA/MM/DD
+def rangopredic(fecha_inicial, fecha_final, comuna, tipo):
+  inicio = datetime.strptime(fecha_inicial, '%Y/%m/%d')
+  fin = datetime.strptime(fecha_final, '%Y/%m/%d')
+  accidentes = 0
+
+  while inicio<=fin:
+    mes = inicio.strftime('%m')
+    dia = inicio.strftime('%d')
+    anio = inicio.strftime('%Y')
+    semana = inicio.strftime('%W')
+
+    if holidays_co.is_holiday_date(inicio):
+      dia_esp = 1
+    else:
+      dia_esp = 0
+      
+    accidentes_dia = model.predict(parapredecir(int(mes), int(dia), comuna, tipo, int(anio), int(semana), dia_esp), transform = False)
+
+    accidentes += accidentes_dia
+
+    inicio = inicio + timedelta(days=1)
+  
+  return accidentes[0]
+
